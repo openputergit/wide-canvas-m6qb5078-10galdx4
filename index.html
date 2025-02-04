@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zero Waste Recipe Generator</title>
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --soft-green: #8CC084;
+            --warm-orange: #FF9F76;
+            --muted-pink: #FFE4E1;
+            --off-white: #FAF9F6;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--off-white);
+        }
+
+        h1, h2, h3 {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .clay-morphism {
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 16px;
+            box-shadow: 
+                35px 35px 68px 0px rgba(145, 192, 255, 0.5),
+                inset -8px -8px 16px 0px rgba(145, 192, 255, 0.6),
+                inset 0px 11px 28px 0px rgb(255, 255, 255);
+        }
+
+        .ingredient-pill {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .ingredient-pill:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 159, 118, 0.3);
+        }
+
+        .generate-btn {
+            transition: transform 0.2s ease;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .generate-btn:active {
+            transform: translateY(1px);
+        }
+
+        .loading-animation {
+            display: none;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .floating {
+            animation: float 2s ease-in-out infinite;
+        }
+
+        .recipe-milestone {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .recipe-milestone.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">Zero Waste Recipe Generator</h1>
+            <p class="text-lg text-gray-600">Transform your leftover ingredients into delicious meals!</p>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <div class="clay-morphism p-6 md:p-8 mb-8">
+                <div class="relative mb-6">
+                    <input type="text" id="ingredient-input" 
+                           class="w-full p-4 text-lg rounded-lg border-2 border-gray-200 focus:border-green-400 focus:outline-none"
+                           placeholder="What ingredients do you have? Start typing or drag items below...">
+                    <div id="suggestions" class="hidden absolute w-full bg-white rounded-lg shadow-lg mt-1 z-10"></div>
+                </div>
+
+                <!-- Selected Ingredients -->
+                <div id="selected-ingredients" class="flex flex-wrap gap-2 mb-6 min-h-[50px]"></div>
+
+                <!-- Generate Button -->
+                <button id="generate-btn" class="generate-btn w-full md:w-auto px-8 py-4 bg-gradient-to-r from-green-400 to-green-500 text-white rounded-lg font-semibold text-lg shadow-lg">
+                    <span class="flex items-center justify-center gap-2">
+                        <i class="bi bi-magic"></i>
+                        Generate Recipe
+                    </span>
+                </button>
+            </div>
+
+            <!-- Categories -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="clay-morphism p-4">
+                    <h3 class="font-semibold mb-3 text-gray-700">Proteins 🥩</h3>
+                    <div class="flex flex-wrap gap-2" id="proteins"></div>
+                </div>
+                <div class="clay-morphism p-4">
+                    <h3 class="font-semibold mb-3 text-gray-700">Vegetables 🥕</h3>
+                    <div class="flex flex-wrap gap-2" id="vegetables"></div>
+                </div>
+                <div class="clay-morphism p-4">
+                    <h3 class="font-semibold mb-3 text-gray-700">Fruits 🍎</h3>
+                    <div class="flex flex-wrap gap-2" id="fruits"></div>
+                </div>
+            </div>
+
+            <!-- Recipe Result -->
+            <div id="recipe-result" class="clay-morphism p-6 mt-8 hidden">
+                <div class="loading-animation" id="loading">
+                    <div class="flex items-center justify-center">
+                        <i class="bi bi-arrow-repeat animate-spin text-4xl text-green-500"></i>
+                    </div>
+                    <p class="text-center text-gray-600 mt-2">Cooking up something special...</p>
+                </div>
+                <div id="recipe-content"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const ingredients = {
+            proteins: ['Chicken', 'Beef', 'Fish', 'Tofu', 'Eggs'],
+            vegetables: ['Tomato', 'Carrot', 'Broccoli', 'Spinach', 'Potato'],
+            fruits: ['Apple', 'Banana', 'Orange', 'Lemon', 'Berries']
+        };
+
+        const selectedIngredients = new Set();
+
+        // Initialize ingredients
+        Object.entries(ingredients).forEach(([category, items]) => {
+            const container = document.getElementById(category);
+            items.forEach(item => {
+                const pill = createIngredientPill(item);
+                container.appendChild(pill);
+            });
+        });
+
+        function createIngredientPill(item) {
+            const pill = document.createElement('div');
+            pill.className = 'ingredient-pill px-3 py-1 bg-white rounded-full text-sm shadow-sm border border-gray-200';
+            pill.textContent = item;
+            pill.draggable = true;
+            
+            pill.addEventListener('click', () => toggleIngredient(item));
+            pill.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', item);
+            });
+            
+            return pill;
+        }
+
+        function toggleIngredient(item) {
+            if (selectedIngredients.has(item)) {
+                selectedIngredients.delete(item);
+            } else {
+                selectedIngredients.add(item);
+            }
+            updateSelectedIngredients();
+        }
+
+        function updateSelectedIngredients() {
+            const container = document.getElementById('selected-ingredients');
+            container.innerHTML = '';
+            selectedIngredients.forEach(item => {
+                const pill = document.createElement('div');
+                pill.className = 'px-3 py-1 bg-green-100 rounded-full text-sm flex items-center gap-2';
+                pill.innerHTML = `${item} <i class="bi bi-x-circle cursor-pointer"></i>`;
+                pill.querySelector('i').addEventListener('click', () => {
+                    selectedIngredients.delete(item);
+                    updateSelectedIngredients();
+                });
+                container.appendChild(pill);
+            });
+        }
+
+        // Drop zone setup
+        const dropZone = document.getElementById('selected-ingredients');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('bg-green-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('bg-green-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('bg-green-50');
+            const item = e.dataTransfer.getData('text/plain');
+            selectedIngredients.add(item);
+            updateSelectedIngredients();
+        });
+
+        // Generate Recipe
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            if (selectedIngredients.size === 0) {
+                alert('Please select at least one ingredient!');
+                return;
+            }
+
+            const resultContainer = document.getElementById('recipe-result');
+            const loading = document.getElementById('loading');
+            const content = document.getElementById('recipe-content');
+
+            resultContainer.classList.remove('hidden');
+            loading.style.display = 'block';
+            content.innerHTML = '';
+
+            // Simulate API call
+            setTimeout(() => {
+                loading.style.display = 'none';
+                displayRecipe();
+            }, 2000);
+        });
+
+        function displayRecipe() {
+            const content = document.getElementById('recipe-content');
+            const ingredients = Array.from(selectedIngredients).join(', ');
+            
+            content.innerHTML = `
+                <h2 class="text-2xl font-semibold mb-4">Your Custom Recipe</h2>
+                <div class="recipe-milestone bg-green-50 p-4 rounded-lg mb-4">
+                    <h3 class="font-medium mb-2">Ingredients Used</h3>
+                    <p>${ingredients}</p>
+                </div>
+                <div class="recipe-milestone bg-orange-50 p-4 rounded-lg mb-4">
+                    <h3 class="font-medium mb-2">Nutritional Benefits</h3>
+                    <p>Rich in vitamins and proteins</p>
+                </div>
+                <div class="recipe-milestone bg-pink-50 p-4 rounded-lg">
+                    <h3 class="font-medium mb-2">Cooking Instructions</h3>
+                    <p>Custom recipe instructions would appear here...</p>
+                </div>
+            `;
+
+            // Animate milestones
+            const milestones = document.querySelectorAll('.recipe-milestone');
+            milestones.forEach((milestone, index) => {
+                setTimeout(() => {
+                    milestone.classList.add('visible');
+                }, index * 200);
+            });
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
